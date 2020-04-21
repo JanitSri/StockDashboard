@@ -28,5 +28,3 @@ Registered User Features:
   * Add Tickers to Watchlist
 
 
-![Main Image](main_page.png)
-
