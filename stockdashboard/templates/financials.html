@@ -1,0 +1,106 @@
+{% extends "dashboardlayout.html" %}
+{% set dashboard_active_page = "financials" %} 
+
+{% block dashboard_content %}
+<!-- Financial Data -->
+<div class="w3-animate-right">
+  <div class="btn-group fin-button-div" role="group">
+      <button id="balance-btn" type="button" class="btn btn-info">Balance Sheet</button>
+      <button id="income-btn" type="button" class="btn btn-outline-info">Income Statement</button>
+      <button id="cashflow-btn" type="button" class="btn btn-outline-info">Cashflow Statement</button>
+  </div>
+
+  <!-- Balance Sheet Data -->
+  <div id='balance-sheet' class="fin-data-div table-responsive w3-animate-opacity">
+      <h4 class="fin-header">Balance Sheet</h4>
+      <table class="table">
+          <thead>
+              <tr>
+                  <th></th>
+                  {% for key, value in fin_data['balance'].items() %}
+                    {% if key == 'header_dates' %}  
+                        {% for date in value %}    
+                            <th class="text-center">{{ date }}</th>
+                        {% endfor %}
+                    {% endif %}
+                  {% endfor %}
+              </tr>
+          </thead>
+          <tbody>
+            {% for key, value in fin_data['balance'].items() %}
+                {% if key != 'header_dates' %}
+                <tr>
+                    <td>{{ key }}</td>    
+                    {% for data in value %}    
+                        <td class="text-center">{{ data }}</td>
+                    {% endfor %}
+                </tr>
+                {% endif %}
+            {% endfor %}
+          </tbody>
+      </table>
+  </div>
+
+  <!-- Income Statement Data -->
+  <div id='income-statement' class="fin-data-div w3-animate-opacity">
+      <h4 class="fin-header">Income Statement</h4>
+      <table class="table">
+        <thead>
+            <tr>
+                <th></th>
+                {% for key, value in fin_data['income'].items() %}
+                  {% if key == 'header_dates' %}  
+                      {% for date in value %}    
+                          <th class="text-center">{{ date|upper }}</th>
+                      {% endfor %}
+                  {% endif %}
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+          {% for key, value in fin_data['income'].items() %}
+              {% if key != 'header_dates' %}
+              <tr>
+                  <td>{{ key }}</td>    
+                  {% for data in value %}    
+                      <td class="text-center">{{ data }}</td>
+                  {% endfor %}
+              </tr>
+              {% endif %}
+          {% endfor %}
+        </tbody>
+    </table>
+  </div>
+
+  <!-- Cashflow Statement Data -->
+  <div id='cashflow-statement' class="fin-data-div w3-animate-opacity">
+      <h4 class="fin-header">Cashflow Statement</h4>
+      <table class="table">
+        <thead>
+            <tr>
+                <th></th>
+                {% for key, value in fin_data['cashflow'].items() %}
+                  {% if key == 'header_dates' %}  
+                      {% for date in value %}    
+                          <th class="text-center">{{ date|upper }}</th>
+                      {% endfor %}
+                  {% endif %}
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+          {% for key, value in fin_data['cashflow'].items() %}
+              {% if key != 'header_dates' %}
+              <tr>
+                  <td>{{ key }}</td>    
+                  {% for data in value %}    
+                      <td class="text-center">{{ data }}</td>
+                  {% endfor %}
+              </tr>
+              {% endif %}
+          {% endfor %}
+        </tbody>
+    </table>
+  </div>
+</div>
+{% endblock dashboard_content %}
