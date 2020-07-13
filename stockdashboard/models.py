@@ -16,7 +16,7 @@ class User(db.Model, UserMixin):
   username = db.Column(db.String(16), unique=True, nullable=False)
   password = db.Column(db.String(64), unique=True, nullable=False)
   date_created = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-  last_login = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+  last_login = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
   watchlist_tickers = db.relationship('Security', secondary='Watchlist', backref='user', lazy='dynamic')
 

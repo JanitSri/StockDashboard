@@ -17,9 +17,3 @@ def search_bar_data():
   search_bar = json.dumps(search_bar)
   return search_bar
 
-
-def in_between(now, start, end):
-    if start <= end:
-        return start <= now < end
-    else:
-        return start <= now or now < end

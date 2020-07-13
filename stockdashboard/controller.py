@@ -1,8 +1,7 @@
 from stockdashboard import db, cache
 from stockdashboard.models import User, Security, News, Company_Information, Daily_Price, Financial
-from stockdashboard.scrapers import end_of_day, company_info, financial_news
+from stockdashboard.scrapers import financial_news, yahoo_finance_scraper
 from stockdashboard.signals.technical_signal_calculations import get_techical_indicators
-from stockdashboard.utils import in_between
 
 import datetime
 import json
@@ -11,8 +10,7 @@ import pandas as pd
 import concurrent.futures
 
 # Instantiate the scraping classes  
-end_of_day = end_of_day.EndOfDayData()
-company_information = company_info.CompanyInformationData()
+yahoo = yahoo_finance_scraper.YahooFinanceScraper()
 fin_news_data = financial_news.FinancialNewsData()
 
 def get_all_data(ticker='tsla'):
@@ -30,7 +28,7 @@ def get_all_data(ticker='tsla'):
   end = _get_end_date()
   ticker_in_DB = ticker_exists(ticker)
   if ticker_in_DB: # check if the ticker exists in the DB
-      _update_eod_DB(ticker, end, ticker_in_DB)
+    _update_eod_DB(ticker, end, ticker_in_DB)
   else:
     added_data = _add_new_data(ticker, end)
 
@@ -54,11 +52,114 @@ def get_all_data(ticker='tsla'):
   cache.set('comp_name',cach_ticker.name)
   cache.set('comp_ticker',cach_ticker.ticker)
   
+
   if not cache.get('sp500_eod'):
     print('GETTING SP500 DATA')
-    _add_SP500_data("S&P 500", end)
+    _add_SP500_data("^GSPC", end)
     
   return True
+
+
+def _get_end_date():
+  """
+  Get the last date of the data stored for a ticker, if the market is open get the previous day data 
+
+  Returns:
+    end: the end date to get the data for  
+  """
+  
+  today = datetime.datetime.now()
+  day_range = today.weekday() in range(1, 6) # check if between Tuesday - Saturday
+  
+  if not day_range:
+      day = today.replace(minute=0, hour=3, second=0, microsecond=0)
+      days_away_from_saturday = abs(((day.weekday() + 1) % 7) - 6)
+      end = day - datetime.timedelta(weeks=1) + datetime.timedelta(days=days_away_from_saturday)
+  else:
+      end = (datetime.datetime.combine(today, datetime.datetime.min.time()) + datetime.timedelta(hours=7))
+  
+  return end.replace(hour=7, minute=0, second=0, microsecond=0).strftime("%d/%m/%Y %H:%M:%S")
+
+
+def get_stats_data(ticker):
+  """
+  Get stats data for the ticker 
+  
+  Parameters:
+      ticker: the ticker to get the data for  
+        
+  Returns:
+      ticker_stats: the stats data for the ticker  
+  """
+  
+  ticker = ticker.upper()
+  
+  if yahoo.get_company_stats(ticker):
+      return yahoo.get_company_stats(ticker)
+  
+  return False
+
+
+def get_latest_ticker_price(ticker):
+  """
+  Get the latest ticker price for automatic update 
+
+  Parameters:
+    ticker: the ticker symbol of the stock 
+  
+  Returns:
+    price: returns the current price 
+  """
+
+  return yahoo.get_current_price(ticker)
+
+  
+def ticker_exists(ticker):
+  """
+  Check if the ticker already exists in the DB
+
+  Parameters:
+    ticker: the ticker symbol of the stock 
+  
+  Returns:
+    ticker: the ticker DB object 
+  """
+
+  return Security.query.filter(Security.ticker == ticker).first()
+
+
+def _update_eod_DB(ticker, end, ticker_DB):
+  """
+  Update the eod_data in the DB
+  
+  Parameters:
+      ticker: the ticker to insert the data for 
+      eod_data: the eod data to be inserted into the DB
+      ticker_DB: the DB object for the ticker 
+  """
+
+  ticker_data = ticker_DB.eod_data.all()[-1]
+  recent_date = ticker_data.date
+  recent_end = datetime.datetime.strptime(_get_end_date(),'%d/%m/%Y %H:%M:%S')
+  print("CURRENT DATE", recent_end.date())
+  print("RECENT EOD DATA DATE IN DB", recent_date)
+  
+  if recent_end.weekday() == 0:
+    recent_end = recent_end + datetime.timedelta(days=-3)
+  elif recent_end.weekday() == 6:
+    recent_end = recent_end + datetime.timedelta(days=-2)
+  else:
+    recent_end = recent_end + datetime.timedelta(days=-1)
+
+  if (recent_end).date() != recent_date: # check the latest date of the eod data 
+    print('DB UPDATING, GETTING MISSING ' + ticker + ' EOD DATA')
+    recent_date = datetime.datetime.strptime(recent_date.strftime('%d/%m/%Y %H:%M:%S'), '%d/%m/%Y %H:%M:%S')
+    next_day = (recent_date.replace(hour=9, minute=30, second=0) + datetime.timedelta(days=1)).strftime("%d/%m/%Y %H:%M:%S")
+    
+    recent_eod = yahoo.get_eod_API(ticker, start_date=next_day, end_date=end)
+    if recent_eod:
+      recent_eod = [x for x in recent_eod if x and datetime.datetime.fromtimestamp(int(x[0])).hour in range(9,10)]
+      _add_daily_price_DB(recent_eod, ticker)
 
 
 def _add_new_data(ticker, end):
@@ -74,18 +175,26 @@ def _add_new_data(ticker, end):
   """
 
   print("ADDING NEW DATA", ticker)
-  ticker_fins = company_information.get_company_financials(ticker)
-  ticker_gen_info = company_information.get_company_general_information(ticker)
-  ticker_eod = end_of_day.get_eod(ticker, end_date=end)
-  ticker_name = company_information.get_company_name(ticker)
+  
+  eod_data_curr = yahoo.get_eod_API(ticker,end_date=_get_end_date())
 
+  with concurrent.futures.ThreadPoolExecutor() as executor:
+      results = [executor.submit(funcs, ticker) 
+                 for funcs in [yahoo.get_ticker_info, 
+                               yahoo.get_company_name,yahoo.get_company_financials]]
+  
+  ticker_eod = eod_data_curr
+  ticker_gen_info = results[0].result()
+  ticker_name = results[1].result()
+  ticker_fins = results[2].result()
   if not ticker_eod: # check if the ticker has any eod data 
     print("EOD DATA DOES NOT EXISTS",ticker)
     return False
 
   print("EOD DATA EXISTS",ticker)
+
   # add the securty name and ticker to db
-  _add_security_DB(ticker_name[1], ticker)
+  _add_security_DB(ticker_name['name'], ticker)
 
   # add the end of day data to db
   _add_daily_price_DB(ticker_eod, ticker)
@@ -97,45 +206,6 @@ def _add_new_data(ticker, end):
   _add_financial_DB(ticker_fins, ticker)
 
   return True
-  
-
-def get_stats_data(ticker):
-  """
-  Get stats data for the ticker 
-  
-  Parameters:
-      ticker: the ticker to get the data for  
-        
-  Returns:
-      ticker_stats: the stats data for the ticker  
-  """
-  
-  ticker = ticker.upper()
-  return company_information.get_company_stats(ticker)
-
-
-def _add_SP500_data(ticker, end_date):
-  """
-  Adds sp500 or other index data to the DB 
-  
-  Parameters:
-      ticker: the ticker to get the data for  
-      end: the end date to get the ticker data 
-  """
-
-  ticker_in_DB = ticker_exists(ticker)
-  if ticker_in_DB:
-    _update_eod_DB(ticker, end_date, ticker_in_DB)
-  else:
-    _add_security_DB("Standard&Poor 500", ticker)
-    ticker_eod = end_of_day.get_eod(ticker, end_date=end_date)
-    
-    _add_daily_price_DB(ticker_eod, ticker)
-    
-  db.session.commit()
-  cach_ticker = Security.query.filter(Security.ticker == ticker).first()
-  cach_ticker.last_updated = datetime.datetime.utcnow()
-  cache.set('sp500_eod', clean_eod_data(cach_ticker.eod_data.all()))
 
 
 def _add_daily_price_DB(eod_data, ticker):
@@ -147,7 +217,7 @@ def _add_daily_price_DB(eod_data, ticker):
       eod_data: the eod data to be inserted into the DB
   """
 
-  for eod in eod_data[::-1]:
+  for eod in eod_data:
         db.session.add(Daily_Price(date=datetime.datetime.utcfromtimestamp(int(eod[0])),open_price=float(eod[1]),close_price=float(eod[4]),adjusted_close_price=float(eod[6]),low_price=float(eod[3]),high_price=float(eod[2]), daily_volume=float(eod[5]),security_ticker=ticker))
 
 
@@ -201,29 +271,6 @@ def _add_news_DB(header, link, ticker, source='google'):
   db.session.add(News(header=header,link=link,source=source,security_ticker=ticker))
 
 
-def _update_eod_DB(ticker, end, ticker_DB):
-  """
-  Update the eod_data in the DB
-  
-  Parameters:
-      ticker: the ticker to insert the data for 
-      eod_data: the eod data to be inserted into the DB
-      ticker_DB: the DB object for the ticker 
-  """
-
-  ticker_data = ticker_DB.eod_data.all()[-1]
-  recent_date = ticker_data.date
-  print("CURRENT DATE", datetime.datetime.strptime(end,'%d/%m/%Y %H:%M:%S').date())
-  print("RECENT EOD DATA DATE IN DB", recent_date)
-  
-  if datetime.datetime.strptime(end,'%d/%m/%Y %H:%M:%S').date() != recent_date: # check the latest date of the eod data 
-    print('DB UPDATING, GETTING MISSING ' + ticker + ' EOD DATA')
-    next_day = (recent_date + datetime.timedelta(days=1)).strftime("%d/%m/%Y")
-    recent_eod = end_of_day.get_eod(ticker, start_date=next_day, end_date=end)
-    recent_eod = _remove_duplicates_eod(recent_eod, ticker)
-    _add_daily_price_DB(recent_eod, ticker)
-
-
 def clean_eod_data(db_eod_data):
   """
   Clean the end of day data 
@@ -273,94 +320,29 @@ def clean_company_information(db_comp_info):
   return output
 
 
-def clean_news(db_news):
+def _add_SP500_data(ticker, end_date):
   """
-  Clean the ticker or market news data 
+  Adds sp500 or other index data to the DB 
   
   Parameters:
-      db_news: the news data to be cleaned 
+      ticker: the ticker to get the data for  
+      end: the end date to get the ticker data 
   """
 
-  output = list()
-  for data in db_news:
-    output.append([data.header, data.link, data.source])
-  
-  return output
-
-def get_tech_ind():
-  """
-  Calculate the technical indicators and cache the data 
-  """
-  cache.set('tech_ind',get_techical_indicators(cache.get('comp_eod'), cache.get('sp500_eod')))
-
-def add_user(first_name, last_name, email, password):
-  """
-  Add the data for the user from the registration page 
-
-  Parameters:
-    first_name: User's first name
-    last_name: User's last name 
-    email: User's email address
-    password: User's password
-  """
-  db.session.add(User(first_name=first_name,last_name=last_name,email=email,username=email,password=password))
+  ticker_in_DB = ticker_exists(ticker)
+  if ticker_in_DB:
+    _update_eod_DB(ticker, end_date, ticker_in_DB)
+  else:
+    _add_security_DB("Standard&Poor 500", ticker)
+    ticker_eod = yahoo.get_eod_API(ticker, end_date=end_date)
+    
+    _add_daily_price_DB(ticker_eod, ticker)
+    
   db.session.commit()
-  return True 
+  cach_ticker = Security.query.filter(Security.ticker == ticker).first()
+  cach_ticker.last_updated = datetime.datetime.utcnow()
+  cache.set('sp500_eod', clean_eod_data(cach_ticker.eod_data.all()))
 
-def user_exists(email):
-  """
-  Check if user exists using email 
-
-  Parameters:
-    email: User's email address
-  
-  Returns:
-    user: user DB object 
-  """
-
-  return User.query.filter_by(email=email).first()
-
-def get_latest_ticker_price(ticker):
-  """
-  Get the latest ticker price for automatic update 
-
-  Parameters:
-    ticker: the ticker symbol of the stock 
-  
-  Returns:
-    price: returns the current price 
-  """
-
-  return end_of_day.get_current_price(ticker)
-
-def ticker_exists(ticker):
-  """
-  Check if the ticker already exists in the DB
-
-  Parameters:
-    ticker: the ticker symbol of the stock 
-  
-  Returns:
-    ticker: the ticker DB object 
-  """
-
-  return Security.query.filter(Security.ticker == ticker).first()
-
-def _get_end_date():
-  """
-  Get the last date of the data stored for a ticker, if the market is open get the previos day data 
-
-  Returns:
-    end: the end date to get the data for  
-  """
-
-  market_open = in_between(datetime.datetime.now().time(), datetime.time(9), datetime.time(22)) and np.is_busday(datetime.date.today().strftime("%Y-%m-%d"))
-  
-  end = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S") # the current datetime 
-  if market_open: # check if the market is open
-    end = (datetime.datetime.combine(datetime.date.today(), datetime.datetime.min.time()) - datetime.timedelta(hours=2)).strftime("%d/%m/%Y %H:%M:%S")
-  
-  return end
 
 def get_ticker_news(ticker):
   """
@@ -388,7 +370,22 @@ def get_ticker_news(ticker):
   cache.set('comp_news', cach_ticker_news) 
 
 
-def get_all_news():
+def clean_news(db_news):
+  """
+  Clean the ticker or market news data 
+  
+  Parameters:
+      db_news: the news data to be cleaned 
+  """
+
+  output = list()
+  for data in db_news:
+    output.append([data.header, data.link, data.source])
+  
+  return output
+
+
+def get_all_news(): # done
   """
   Get the news for the entire market  
   """
@@ -429,34 +426,26 @@ def get_all_news():
   
   return result_dict
 
-    
-def _remove_duplicates_eod(duplicate_list,ticker):
+
+def get_tech_ind():
   """
-  Make sure there is no duplicates when adding ticker eod data 
+  Calculate the technical indicators and cache the data 
+  """
+  cache.set('tech_ind',get_techical_indicators(cache.get('comp_eod'), cache.get('sp500_eod')))
+
+
+def user_exists(email):
+  """
+  Check if user exists using email 
 
   Parameters:
-    ticker: the ticker symbol of the stock 
-    duplicate_list: list of the webscraped eod data 
+    email: User's email address
+  
+  Returns:
+    user: user DB object 
   """
-  
-  formated_list = list()
-  visited = set()
-  for data in duplicate_list[::-1]:
-    data = list(data)
-    temp = datetime.datetime.utcfromtimestamp(int(data[0])).strftime('%m/%d/%Y')
-    if temp not in visited:
-      formated_list.append(data)
-      visited.add(temp)
-  
-  index = 0
-  while(index < len(formated_list) and Daily_Price.query.filter(Daily_Price.security_ticker == ticker, Daily_Price.date == datetime.datetime.utcfromtimestamp(int(formated_list[index][0])).date()).first()):
-    index += 1
 
-  output_list = formated_list[index:]
-  output_list = output_list[::-1]
-  return output_list
-    
-
+  return User.query.filter_by(email=email).first()
 
 def get_user_watchlist(user_email):
   """
@@ -511,6 +500,7 @@ def add_user_watchlist(user_email, ticker):
 
   return True
 
+
 def delete_user_watchlist(user_email, ticker):
   """
   Remove ticker from the watchlist of the user 
@@ -528,4 +518,31 @@ def delete_user_watchlist(user_email, ticker):
     return True 
   
   return False
-  
+
+
+def add_user(first_name, last_name, email, password):
+  """
+  Add the data for the user from the registration page 
+
+  Parameters:
+    first_name: User's first name
+    last_name: User's last name 
+    email: User's email address
+    password: User's password
+  """
+  db.session.add(User(first_name=first_name,last_name=last_name,email=email,username=email,password=password))
+  db.session.commit()
+  return True 
+
+
+def update_user_login(user):
+  """
+  Update the last login of the user
+
+  Parameters:
+    user: the DB object of the user
+  """
+
+  user.last_login = datetime.datetime.utcnow()
+  db.session.commit()
+  return True 

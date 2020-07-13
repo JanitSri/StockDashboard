@@ -8,7 +8,7 @@ from stockdashboard import app, cache, bcrypt, login_manager
 from stockdashboard.utils import search_bar_data
 from stockdashboard.plots.plots import make_plot
 from stockdashboard.signals import technical_signal_calculations
-from stockdashboard.controller import get_all_data, get_tech_ind, add_user, user_exists, get_latest_ticker_price, get_all_news, get_ticker_news, get_user_watchlist, add_user_watchlist, delete_user_watchlist
+from stockdashboard.controller import get_all_data, get_tech_ind, add_user, user_exists, get_latest_ticker_price, get_all_news, get_ticker_news, get_user_watchlist, add_user_watchlist, delete_user_watchlist, update_user_login
 from stockdashboard.forms import RegistrationForm, LoginForm
 
 search_bar_options = cache.get('search_bar_options')
@@ -134,6 +134,7 @@ def login():
     user = user_exists(form.email.data)
     if user and bcrypt.check_password_hash(user.password, form.password.data):
       login_user(user, form.remember.data)
+      update_user_login(user)
       next_page = request.args.get('next')[1:] if request.args.get('next') and request.args.get('next').startswith('/') else request.args.get('next')
 
       if next_page == 'get_daily_price_csv':

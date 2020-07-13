@@ -17,25 +17,29 @@
           <thead>
               <tr>
                   <th></th>
-                  {% for key, value in fin_data['balance'].items() %}
-                    {% if key == 'header_dates' %}  
-                        {% for date in value %}    
-                            <th class="text-center">{{ date }}</th>
-                        {% endfor %}
-                    {% endif %}
+                  {% for data_year in fin_data['balance'] %}
+                    {% for key, value in data_year.items() %}
+                        {% if key == 'endDate' and key != 'maxAge' %}  
+                            <th class="text-center">{{ data_year[key]['fmt'] }}</th>
+                        {% endif %}
+                    {% endfor %}
                   {% endfor %}
               </tr>
           </thead>
           <tbody>
-            {% for key, value in fin_data['balance'].items() %}
-                {% if key != 'header_dates' %}
+            {% for key in fin_data['balance'][0].keys() %}
                 <tr>
-                    <td>{{ key }}</td>    
-                    {% for data in value %}    
-                        <td class="text-center">{{ data }}</td>
-                    {% endfor %}
+                    {% if key != 'endDate' and key != 'maxAge' %}
+                        <td>{{ key }}</td>
+                        {% for data_year in fin_data['balance'] %}
+                            {% if key in data_year.keys() and data_year[key]['fmt']%}  
+                                <td class="text-center">{{ data_year[key]['fmt'] }}</td>
+                            {% else %}
+                                <td class="text-center">NAN</td>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
                 </tr>
-                {% endif %}
             {% endfor %}
           </tbody>
       </table>
@@ -48,26 +52,30 @@
         <thead>
             <tr>
                 <th></th>
-                {% for key, value in fin_data['income'].items() %}
-                  {% if key == 'header_dates' %}  
-                      {% for date in value %}    
-                          <th class="text-center">{{ date|upper }}</th>
-                      {% endfor %}
-                  {% endif %}
+                {% for data_year in fin_data['income'] %}
+                    {% for key, value in data_year.items() %}
+                        {% if key == 'endDate' and key != 'maxAge' %}  
+                            <th class="text-center">{{ data_year[key]['fmt'] }}</th>
+                        {% endif %}
+                    {% endfor %}
                 {% endfor %}
             </tr>
         </thead>
         <tbody>
-          {% for key, value in fin_data['income'].items() %}
-              {% if key != 'header_dates' %}
-              <tr>
-                  <td>{{ key }}</td>    
-                  {% for data in value %}    
-                      <td class="text-center">{{ data }}</td>
-                  {% endfor %}
-              </tr>
-              {% endif %}
-          {% endfor %}
+            {% for key in fin_data['income'][0].keys() %}
+                <tr>
+                    {% if key != 'endDate' and key != 'maxAge' %}
+                        <td>{{ key }}</td>
+                        {% for data_year in fin_data['income'] %}
+                            {% if key in data_year.keys() and data_year[key]['fmt']%}  
+                                <td class="text-center">{{ data_year[key]['fmt'] }}</td>
+                            {% else %}
+                                <td class="text-center">NAN</td>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </tr>
+            {% endfor %}
         </tbody>
     </table>
   </div>
@@ -79,26 +87,30 @@
         <thead>
             <tr>
                 <th></th>
-                {% for key, value in fin_data['cashflow'].items() %}
-                  {% if key == 'header_dates' %}  
-                      {% for date in value %}    
-                          <th class="text-center">{{ date|upper }}</th>
-                      {% endfor %}
-                  {% endif %}
+                {% for data_year in fin_data['cashflow'] %}
+                    {% for key, value in data_year.items() %}
+                        {% if key == 'endDate' and key != 'maxAge' %}  
+                            <th class="text-center">{{ data_year[key]['fmt'] }}</th>
+                        {% endif %}
+                    {% endfor %}
                 {% endfor %}
             </tr>
         </thead>
         <tbody>
-          {% for key, value in fin_data['cashflow'].items() %}
-              {% if key != 'header_dates' %}
-              <tr>
-                  <td>{{ key }}</td>    
-                  {% for data in value %}    
-                      <td class="text-center">{{ data }}</td>
-                  {% endfor %}
-              </tr>
-              {% endif %}
-          {% endfor %}
+            {% for key in fin_data['cashflow'][0].keys() %}
+                <tr>
+                    {% if key != 'endDate' and key != 'maxAge' %}
+                        <td>{{ key }}</td>
+                        {% for data_year in fin_data['cashflow'] %}
+                            {% if key in data_year.keys() and data_year[key]['fmt']%}  
+                                <td class="text-center">{{ data_year[key]['fmt'] }}</td>
+                            {% else %}
+                                <td class="text-center">NAN</td>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </tr>
+            {% endfor %}
         </tbody>
     </table>
   </div>

@@ -4,7 +4,7 @@
 
 <!-- Page Content -->
 <div class="container main-container main-container-3d">
-
+  
   <!-- Watch List -->
   <div class="row wl-container">
       <h1>My Watchlist</h1>
@@ -18,6 +18,8 @@
           <button id="add-row" type="submit" class="btn btn-primary mb-2">Add To Watchlist</button>
       </div>
   </div>
+
+  <div id="loading"></div>
 
   <div id="watchlist_div" class="row wl-container table-responsive w3-animate-right">
       <table id='watchlistTable' class="table table-hover">
@@ -33,7 +35,7 @@
               </tr>
           </thead>
           <tbody>
-              {% for ticker_data in user_watchlist%}
+              {% for ticker_data in user_watchlist %}
                 <tr id="{{ ticker_data[0] | replace('.','_') }}">
                     <td>
                         <a class="wl-link" href="/overview?search-bar-ticker={{ ticker_data[0] }}" data-toggle="tooltip" data-placement="right" data-html="true" title="View more information on {{ ticker_data[1] }}">
@@ -77,13 +79,14 @@
         $("#ticker-error").remove();
 
         symbol = symbol.toUpperCase();
-
+        $("#loading").show();
         $.ajax({
             url: "{{url_for('add_to_watchlist')}}",
             type: 'POST',
             dataType: 'json',
             data: JSON.stringify({'symbol':symbol}),
             complete:function(data){
+                $("#loading").hide();       
                 if(data.responseText == 'False'){
                     $('#tickerWlSymbol').addClass("is-invalid")
                     $("#tickerInput").append('<div id="ticker-error" class="invalid-feedback">Please choose another ticker.</div>');

@@ -346,7 +346,14 @@ a.ui-button:active,
     font-weight: 300;
 }
 
-
+div#loading {
+    width: 75px;
+    height: 35px;
+    display: none;
+    background: url(/static/loadingimage.gif) no-repeat;
+    cursor: wait;
+    margin-left: 40px;
+}
 
 
 
